@@ -27,7 +27,7 @@ aXP='//table[@class="adminlist"]/tbody/tr[td[contains(text(),"Periodo di")]]/td[
 hrefXP='//table[@class="adminlist"]/tbody/tr/td[@class="center"]/a/@onclick'
 EnteedUfficioXP='//table[@class="adminlist"]/tbody/tr[td[contains(text(),"Ente ed Ufficio")]]/td[@class="Colonna_Dx"]/span[2]'
 
-curl -ksL -kL "http://www.comune.patti.me.it/index.php?option=com_albopretorio&id_Miky=_0" |
+curl -ksL "http://www.comune.patti.me.it/index.php?option=com_albopretorio&id_Miky=_0" |
   scrape -be '//div[@id="albopretorio"]/ul//a' |
   xq -r '.html.body.a[]."@href"' >"$folder"/rawdata/pagine.txt
 
@@ -37,7 +37,7 @@ rm "$folder"/rawdata/*.html
 # scarica file html nuovi sezione
 x=1
 while read p; do
-  curl "$urlbase""$p" >"$folder"/rawdata/"$x".html
+  curl -kL "$urlbase""$p""&limit=50&limitstart=0" |  perl -pe 's/\r\n/ /g' >"$folder"/rawdata/"$x".html
   x=$(($x + 1))
 done <"$folder"/rawdata/pagine.txt
 
@@ -51,7 +51,7 @@ done
 # rimuovi CSV già creati
 rm "$folder"/processing/*.csv
 
-# estrai dai file HTML le info
+# estrai dai file HTML le info e inseriscile in dei file di esto
 for i in "$folder"/rawdata/*.html; do
   #crea una variabile da usare per estrarre nome e estensione
   filename=$(basename "$i")
@@ -60,8 +60,17 @@ for i in "$folder"/rawdata/*.html; do
   #estrai nome file
   filename="${filename%.*}"
   scrape <"$i" -e ''"$NumeroAlboXP"'/text()' | tr '\t' '\n' | sed '$d' >"$folder"/processing/"$filename"_1.csv
-  scrape <"$i" -e ''"$OggettoJQ"'/text()' | tr '\t' '\n' | sed '$d' >"$folder"/processing/"$filename"_2.csv
-  scrape <"$i" -e ''"$daJQ"'/text()' | tr '\t' '\n' | sed '$d' >"$folder"/processing/"$filename"_3.csv
+  scrape <"$i" -e ''"$OggettoXP"'/text()' | tr '\t' '\n' | sed '$d' >"$folder"/processing/"$filename"_2.csv
+  scrape <"$i" -e ''"$daXP"'/text()' | tr '\t' '\n' | sed '$d' >"$folder"/processing/"$filename"_3.csv
   scrape <"$i" -e ''"$hrefXP"'' | grep -oE '[0-9]{2,}' >"$folder"/processing/"$filename"_4.csv
   paste -d "\t" "$folder"/processing/"$filename"_*csv >"$folder"/processing/"$filename"_out.csv
 done
+
+# unisci CSV sezioni
+mlr --icsvlite --ocsv --ifs tab --implicit-csv-header unsparsify then label id,des,data,href then clean-whitespace "$folder"/processing/*_out.csv >"$folder"/pubblicazioni.csv
+# fai JOIN con file allegati
+mlr --csv join -j href -l href -r id -f "$folder"/pubblicazioni.csv then unsparsify "$folder"/rawdata/listaAllegati.csv >"$folder"/rss.csv
+# rinomina colonna
+mlr -I --csv rename source,allegati "$folder"/rss.csv
+# rimuovi righe senza allegati
+mlr -I --csv filter -x '$allegati==""' "$folder"/rss.csv
