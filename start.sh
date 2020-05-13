@@ -13,7 +13,7 @@ urlbase="http://www.comune.patti.me.it"
 
 # scarica lista allegati 2020 e crea colonna in cui raccoglierli tutti
 curl -ksL "http://www.comune.patti.me.it/administrator/components/com_albopretorio/allegati/" |
-  scrape -be "//table/tr[position() > 3]//a[contains(@href,'_2020-')]" |
+  scrape -be "//table/tr[position() > 3]//a[contains(@href,'_2020-') or contains(@href,'_2019-')]" |
   xq -r '.html.body.a[]."@href"' |
   mlr --csv --implicit-csv-header put '$source="http://www.comune.patti.me.it/administrator/components/com_albopretorio/allegati/".$1' then nest --explode --values --across-fields --nested-fs "_" -f 1 then cut -f 1_2,source then nest --ivar " " -f source then label id >"$folder"/rawdata/listaAllegati.csv
 
