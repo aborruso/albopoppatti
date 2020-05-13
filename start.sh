@@ -1,6 +1,9 @@
 #!/bin/bash
 
-# lista allegati
+### requisiti ###
+# miller https://github.com/johnkerl/miller
+# dateutils https://github.com/hroptatyr/dateutils
+### requisiti ###
 
 set -x
 
@@ -74,3 +77,6 @@ mlr --csv join -j href -l href -r id -f "$folder"/pubblicazioni.csv then unspars
 mlr -I --csv rename source,allegati "$folder"/rss.csv
 # rimuovi righe senza allegati
 mlr -I --csv filter -x '$allegati==""' "$folder"/rss.csv
+
+# convertire date in formato RSS
+mlr -I --csv put '$RSSdata=system("dconv --from-locale it_IT -i \"%d %B %Y\" -f \"%a, %d %b %Y 02:00:00 +0200\" \"".$data."\"")' "$folder"/rss.csv
