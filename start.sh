@@ -80,3 +80,35 @@ mlr -I --csv filter -x '$allegati==""' "$folder"/rss.csv
 
 # convertire date in formato RSS
 mlr -I --csv put '$RSSdata=system("dconv --from-locale it_IT -i \"%d %B %Y\" -f \"%a, %d %b %Y 02:00:00 +0200\" \"".$data."\"")' "$folder"/rss.csv
+mlr --c2t --quote-none sort -nr href \
+then put '$des=gsub($des,"<","&lt")' \
+then put '$des=gsub($des,">","&gt;")' \
+then put '$des=gsub($des,"&","&amp;")' \
+then put '$des=gsub($des,"'\''","&apos;")' \
+then put '$des=gsub($des,"\"","&quot;")' \
+then put '$guid=regextract($allegati,"http.{1,}-1[\.a-z]{1,}")' "$folder"/rss.csv \
+| tail -n +2 >"$folder"/rss.tsv
+
+dos2unix "$folder"/rss.tsv
+
+# creo una copia del template del feed
+cp "$folder"/feedTemplate.xml "$folder"/feed.xml
+
+# inserisco gli attributi di base nel feed
+xmlstarlet ed -L --subnode "//channel" --type elem -n title -v "Albo Pretorio del Comune di Patti" "$folder"/feed.xml;
+xmlstarlet ed -L --subnode "//channel" --type elem -n description -v "Albo Pretorio del Comune di Patti" "$folder"/feed.xml;
+xmlstarlet ed -L --subnode "//channel" --type elem -n link -v "http://evvivaenrico.it/feed.xml" "$folder"/feed.xml;
+
+# leggo in loop i dati del file CSV e li uso per creare nuovi item nel file XML
+newcounter=0
+while IFS=$'\t' read -r href id des data allegati RSSdata guid
+do
+    newcounter=`expr $newcounter + 1`;
+    xmlstarlet ed -L --subnode "//channel" --type elem -n item -v "" \
+    --subnode "//item[$newcounter]" --type elem -n title -v "$des" \
+    --subnode "//item[$newcounter]" --type elem -n description -v "$allegati" \
+    --subnode "//item[$newcounter]" --type elem -n link -v "$guid" \
+    --subnode "//item[$newcounter]" --type elem -n pubDate -v "$RSSdata" \
+    --subnode "//item[$newcounter]" --type elem -n guid -v "$guid" \
+    "$folder"/feed.xml;
+done < "$folder"/rss.tsv
