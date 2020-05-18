@@ -2,3 +2,5 @@ tmp*
 processing/*
 rawdata/*
 feed.xml
+*.csv
+*.tsv
