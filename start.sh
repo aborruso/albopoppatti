@@ -79,7 +79,7 @@ if [ $code -eq 200 ]; then
   # rimuovi CSV già creati
   rm "$folder"/processing/*.csv
 
-  # estrai dai file HTML le info e inseriscile in dei file di esto
+  # estrai dai file HTML le info, inseriscile in dei file di testo e uniscili per sezione
   for i in "$folder"/rawdata/*.html; do
     #crea una variabile da usare per estrarre nome e estensione
     filename=$(basename "$i")
@@ -94,7 +94,7 @@ if [ $code -eq 200 ]; then
     paste -d "\t" "$folder"/processing/"$filename"_*csv >"$folder"/processing/"$filename"_out.csv
   done
 
-  # unisci CSV i CSV delle varie sezioni di albo
+  # unisci tutti i CSV delle varie sezioni di albo
   mlr --icsvlite --ocsv --ifs tab --implicit-csv-header unsparsify then label id,des,data,href then clean-whitespace "$folder"/processing/*_out.csv >"$folder"/pubblicazioni.csv
   # fai JOIN con file allegati
   mlr --csv join -j href -l href -r id -f "$folder"/pubblicazioni.csv then unsparsify "$folder"/rawdata/listaAllegati.csv >"$folder"/rss.csv
@@ -150,7 +150,11 @@ if [ $code -eq 200 ]; then
       "$folder"/feed.xml
   done <"$folder"/rss.tsv
 
-  # copia feed nella cartella web
-  cp "$folder"/feed.xml "$web"/feed.xml
+  host=$(hostname)
+
+  # copia feed nella cartella web se non sei sul PC DESKTOP-7NVNDNF
+  if [[ $host != "DESKTOP-7NVNDNF" ]]; then
+    cp "$folder"/feed.xml "$web"/feed.xml
+  fi
 
 fi
