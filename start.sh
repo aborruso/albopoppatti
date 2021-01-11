@@ -54,6 +54,7 @@ if [ $code -eq 200 ]; then
   hrefXP='//table[@class="adminlist"]/tbody/tr/td[@class="center"]/a/@onclick'
   EnteedUfficioXP='//table[@class="adminlist"]/tbody/tr[td[contains(text(),"Ente ed Ufficio")]]/td[@class="Colonna_Dx"]/span[2]'
 
+  # crea lista pagina da scaricare
   curl -ksL "http://www.comune.patti.me.it/index.php?option=com_albopretorio&id_Miky=_0" |
     scrape -be '//div[@id="albopretorio"]/ul//a' |
     xq -r '.html.body.a[]."@href"' >"$folder"/rawdata/pagine.txt
@@ -61,14 +62,14 @@ if [ $code -eq 200 ]; then
   # cancella file html salvati
   rm "$folder"/rawdata/*.html
 
-  # scarica file html nuovi sezione
+  # scarica pagina
   x=1
   while read p; do
     curl -kL "$urlbase""$p""&limit=50&limitstart=0" | perl -pe 's/\r\n/ /g' >"$folder"/rawdata/"$x".html
     x=$(($x + 1))
   done <"$folder"/rawdata/pagine.txt
 
-  # cancella file senza elementi
+  # cancella pagine senza elementi
   for i in "$folder"/rawdata/*.html; do
     if grep -q 'Nessun documento caricato' "$i"; then
       rm "$i"
@@ -78,7 +79,7 @@ if [ $code -eq 200 ]; then
   # rimuovi CSV già creati
   rm "$folder"/processing/*.csv
 
-  # estrai dai file HTML le info e inseriscile in dei file di esto
+  # estrai dai file HTML le info, inseriscile in dei file di testo e uniscili per sezione
   for i in "$folder"/rawdata/*.html; do
     #crea una variabile da usare per estrarre nome e estensione
     filename=$(basename "$i")
@@ -93,16 +94,16 @@ if [ $code -eq 200 ]; then
     paste -d "\t" "$folder"/processing/"$filename"_*csv >"$folder"/processing/"$filename"_out.csv
   done
 
-  # unisci CSV sezioni
+  # unisci tutti i CSV delle varie sezioni di albo
   mlr --icsvlite --ocsv --ifs tab --implicit-csv-header unsparsify then label id,des,data,href then clean-whitespace "$folder"/processing/*_out.csv >"$folder"/pubblicazioni.csv
   # fai JOIN con file allegati
   mlr --csv join -j href -l href -r id -f "$folder"/pubblicazioni.csv then unsparsify "$folder"/rawdata/listaAllegati.csv >"$folder"/rss.csv
   # rinomina colonna
   mlr -I --csv rename source,allegati "$folder"/rss.csv
-  # rimuovi righe senza allegati
+  # rimuovi eventuali righe senza allegati
   mlr -I --csv filter -x '$allegati==""' "$folder"/rss.csv
 
-  # convertire date in formato RSS
+  # converti date in formato RSS, converti caratteri non consentiti in XML e aggiungi la data nel titolo atto
   mlr -I --csv put '$RSSdata=system("dconv --from-locale it_IT -i \"%d %B %Y\" -f \"%a, %d %b %Y 02:00:00 +0200\" \"".$data."\"")' "$folder"/rss.csv
   mlr --c2t --quote-none sort -nr href \
     then put '$des=gsub($des,"<","&lt")' \
@@ -114,12 +115,13 @@ if [ $code -eq 200 ]; then
     then put '$des=$data." | ".$des' "$folder"/rss.csv |
     tail -n +2 >"$folder"/rss.tsv
 
+  # cambiail carriage return del file
   dos2unix "$folder"/rss.tsv
 
-  # creo una copia del template del feed
+  # crea copia del template del feed
   cp "$folder"/feedTemplate.xml "$folder"/feed.xml
 
-  # inserisco gli attributi di base nel feed
+  # inserisci gli attributi anagrafici nel feed
   xmlstarlet ed -L --subnode "//channel" --type elem -n title -v "$titolo" "$folder"/feed.xml
   xmlstarlet ed -L --subnode "//channel" --type elem -n description -v "$descrizione" "$folder"/feed.xml
   xmlstarlet ed -L --subnode "//channel" --type elem -n link -v "$selflink" "$folder"/feed.xml
@@ -135,7 +137,7 @@ if [ $code -eq 200 ]; then
   xmlstarlet ed -L --subnode "//channel" --type elem -n category -v "$name" -i "//channel/category[8]" -t "attr" -n "domain" -v "http://albopop.it/specs#channel-category-name" "$folder"/feed.xml
   xmlstarlet ed -L --subnode "//channel" --type elem -n category -v "$uid" -i "//channel/category[9]" -t "attr" -n "domain" -v "http://albopop.it/specs#channel-category-uid" "$folder"/feed.xml
 
-  # leggo in loop i dati del file CSV e li uso per creare nuovi item nel file XML
+  # leggi in loop i dati del file TSV e usali per creare nuovi item nel file XML
   newcounter=0
   while IFS=$'\t' read -r href id des data allegati RSSdata guid; do
     newcounter=$(expr $newcounter + 1)
@@ -148,6 +150,11 @@ if [ $code -eq 200 ]; then
       "$folder"/feed.xml
   done <"$folder"/rss.tsv
 
-  cp "$folder"/feed.xml "$web"/feed.xml
+  host=$(hostname)
+
+  # copia feed nella cartella web se non sei sul PC DESKTOP-7NVNDNF
+  if [[ $host != "DESKTOP-7NVNDNF" ]]; then
+    cp "$folder"/feed.xml "$web"/feed.xml
+  fi
 
 fi
